@@ -1,4 +1,4 @@
-import { select, input, confirm } from '@inquirer/prompts';
+import { select, input, confirm, search } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { loadConfig } from '../utils/config.js';
 import { isTicketId, generateBranchName } from '../utils/branch.js';
@@ -226,34 +226,69 @@ async function handleNewTicket(
   const domainField = customFields.find(f => f.name.toLowerCase() === 'domain');
 
   // 5. Prompt for Type (in ClickUp order)
-  let typeValue: number | undefined;
+  let typeValue: string | undefined;
   if (typeField?.type_config?.options) {
     typeValue = await select({
       message: 'Type:',
       choices: typeField.type_config.options.map(o => ({
         name: o.name,
-        value: o.orderindex,
+        value: o.id,
       })),
       loop: false,
     });
   }
 
-  // 6. Prompt for Domain (sorted alphabetically)
-  let domainValue: number | undefined;
+  // 6. Prompt for Domain(s) - searchable, multi-select
+  // Domain can be either a dropdown (uses 'name') or labels (uses 'label') type field
+  const domainValues: string[] = [];
   if (domainField?.type_config?.options) {
-    const validDomainOptions = domainField.type_config.options.filter(o => o.name);
+    const getOptionName = (o: { name?: string; label?: string }) => o.name || o.label || '';
+    const validDomainOptions = domainField.type_config.options.filter(o => getOptionName(o));
     const sortedDomainOptions = [...validDomainOptions].sort((a, b) =>
-      a.name.localeCompare(b.name)
+      getOptionName(a).localeCompare(getOptionName(b))
     );
+
     if (sortedDomainOptions.length > 0) {
-      domainValue = await select({
-        message: 'Domain:',
-        choices: sortedDomainOptions.map(o => ({
-          name: o.name,
-          value: o.orderindex,
-        })),
-        loop: false,
-      });
+      // Allow selecting multiple domains with search
+      let selectingDomains = true;
+      while (selectingDomains) {
+        const availableOptions = sortedDomainOptions.filter(o => !domainValues.includes(o.id));
+        if (availableOptions.length === 0) break;
+
+        const selectedNames = domainValues
+          .map(id => getOptionName(sortedDomainOptions.find(o => o.id === id) || {}))
+          .filter(Boolean);
+        const currentSelection = selectedNames.length > 0
+          ? chalk.dim(` (selected: ${selectedNames.join(', ')})`)
+          : '';
+
+        const domainId = await search({
+          message: `Domain${currentSelection}:`,
+          source: async (term) => {
+            const filtered = term
+              ? availableOptions.filter(o =>
+                  getOptionName(o).toLowerCase().includes(term.toLowerCase())
+                )
+              : availableOptions;
+            return [
+              ...(domainValues.length > 0 ? [{ name: chalk.green('✓ Done selecting'), value: '__done__' }] : []),
+              ...filtered.map(o => ({ name: getOptionName(o), value: o.id })),
+            ];
+          },
+        });
+
+        if (domainId === '__done__') {
+          selectingDomains = false;
+        } else {
+          domainValues.push(domainId);
+          // Ask if they want to add more
+          const addMore = await confirm({
+            message: 'Add another domain?',
+            default: false,
+          });
+          if (!addMore) selectingDomains = false;
+        }
+      }
     }
   }
 
@@ -294,8 +329,13 @@ async function handleNewTicket(
       const spinner3 = createSpinner('Generating description...').start();
 
       try {
-        const typeName = typeField?.type_config?.options?.find(o => o.orderindex === typeValue)?.name || '';
-        const domainName = domainField?.type_config?.options?.find(o => o.orderindex === domainValue)?.name || '';
+        const typeName = typeField?.type_config?.options?.find(o => o.id === typeValue)?.name || '';
+        const getOptionName = (o: { name?: string; label?: string }) => o.name || o.label || '';
+        const domainNames = domainValues
+          .map(id => domainField?.type_config?.options?.find(o => o.id === id))
+          .filter(Boolean)
+          .map(o => getOptionName(o!));
+        const domainName = domainNames.join(', ');
 
         const hasUserCriteria = acceptanceCriteria.length > 0;
 
@@ -344,12 +384,14 @@ Be concise and actionable. Output only the description, no preamble.
   const spinner4 = createSpinner('Creating ticket...').start();
 
   try {
-    const customFieldsPayload: Array<{ id: string; value: number }> = [];
+    const customFieldsPayload: Array<{ id: string; value: string | string[] }> = [];
     if (typeField && typeValue !== undefined) {
       customFieldsPayload.push({ id: typeField.id, value: typeValue });
     }
-    if (domainField && domainValue !== undefined) {
-      customFieldsPayload.push({ id: domainField.id, value: domainValue });
+    if (domainField && domainValues.length > 0) {
+      // Labels fields expect an array of IDs, dropdown fields expect a single ID
+      const domainPayloadValue = domainField.type === 'labels' ? domainValues : domainValues[0];
+      customFieldsPayload.push({ id: domainField.id, value: domainPayloadValue });
     }
 
     const task = await clickup.createTask(listId, {

@@ -61,7 +61,8 @@ export interface ClickUpCustomField {
   type_config?: {
     options?: Array<{
       id: string;
-      name: string;
+      name?: string;   // dropdown fields use 'name'
+      label?: string;  // labels fields use 'label'
       orderindex: number;
     }>;
   };

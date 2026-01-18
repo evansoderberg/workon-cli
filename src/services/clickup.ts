@@ -91,7 +91,7 @@ export class ClickUpClient {
     markdown_description?: string;
     assignees?: number[];
     status?: string;
-    custom_fields?: Array<{ id: string; value: number | string }>;
+    custom_fields?: Array<{ id: string; value: number | string | string[] }>;
   }): Promise<ClickUpTask> {
     if (isDryRun()) {
       dryRunLog('clickup', 'Would create task', {

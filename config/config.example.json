@@ -1,0 +1,41 @@
+{
+  "clickup": {
+    "apiToken": "pk_YOUR_TOKEN_HERE",
+    "userId": "YOUR_USER_ID",
+    "workspaceId": "YOUR_WORKSPACE_ID"
+  },
+  "github": {
+    "username": "YOUR_GITHUB_USERNAME"
+  },
+  "git": {
+    "branchPrefix": "YOUR_NAME",
+    "baseBranch": "main"
+  },
+  "workspaces": {
+    "Sathreeva": {
+      "folderId": "98328747",
+      "sprintPatterns": [
+        "Sprint \\d+ \\("
+      ]
+    },
+    "Okay Bloomers": {
+      "folderId": "134360025",
+      "sprintPatterns": [
+        "Sprint \\d+ \\("
+      ]
+    },
+    "Commerce 1": {
+      "folderId": "90140553026",
+      "sprintPatterns": [
+        "\\d+ Commerce 1 \\("
+      ]
+    }
+  },
+  "defaults": {
+    "status": "ON DECK"
+  },
+  "ai": {
+    "enabled": true,
+    "generateTicketDescriptions": true
+  }
+}

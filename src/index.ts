@@ -6,6 +6,7 @@ import { mergeCommand } from './commands/merge.js';
 import { initCommand } from './commands/init.js';
 import { prUpdateCommand, type PrUpdateOptions } from './commands/pr-update.js';
 import { ticketCommand } from './commands/ticket.js';
+import { commentCommand } from './commands/comment.js';
 import { withGracefulExit } from './utils/exit.js';
 import { setDryRun } from './utils/dry-run.js';
 
@@ -85,6 +86,16 @@ program
   .description('Get ticket info from ClickUp (for current branch or specified ticket)')
   .argument('[ticket-id]', 'Ticket ID (defaults to extracting from current branch)')
   .action(withGracefulExit(ticketCommand));
+
+program
+  .command('comment')
+  .description('Add a comment to the current ticket')
+  .argument('[comment]', 'Comment text (or pipe via stdin)')
+  .option('--dry-run', 'Show what would be done without executing')
+  .action(withGracefulExit((comment: string | undefined, opts: { dryRun?: boolean }) => {
+    if (opts.dryRun) setDryRun(true);
+    return commentCommand(comment);
+  }));
 
 // Default command: treat argument as ticket ID (shortcut for `workon start <id>`)
 program

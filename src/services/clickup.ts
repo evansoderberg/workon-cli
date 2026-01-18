@@ -136,6 +136,20 @@ export class ClickUpClient {
 
     return data.tasks.slice(0, limit);
   }
+
+  /**
+   * Add a comment to a task
+   */
+  async commentOnTask(taskId: string, comment: string): Promise<void> {
+    if (isDryRun()) {
+      dryRunLog('clickup', `Would comment on task ${taskId}`, { comment });
+      return;
+    }
+    await this.request(`/task/${taskId}/comment`, {
+      method: 'POST',
+      body: JSON.stringify({ comment_text: comment }),
+    });
+  }
 }
 
 export function createClickUpClient(token: string, workspaceId: string): ClickUpClient {

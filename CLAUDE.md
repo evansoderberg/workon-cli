@@ -7,6 +7,7 @@ CLI for ClickUp + GitHub integration. Available globally via `workon` command.
 Examples:
 - "workon 86b7x5453" → Run `workon 86b7x5453` to create/checkout the branch for that ticket, then run `workon ticket` to bring the ticket context into the session
 - "workon ticket" → Run `workon ticket` to get context on the current task
+- "workon comment" → Run `workon comment "..."` to add a comment to the current ticket
 - "workon pr" → Start the PR creation flow using the `workon pr` command with appropriate flags
 
 ## Commands You Can Run
@@ -29,6 +30,12 @@ workon pr-update --summary "..." --description "..." --testing "..." --ticket <i
 
 # Pipe content to a section
 echo "content" | workon pr-update --description -
+
+# Add a comment to the current ticket
+workon comment "Your comment here"
+
+# Pipe content to comment
+echo "Comment content" | workon comment
 
 # Check PR status
 workon pr-status [pr-number]

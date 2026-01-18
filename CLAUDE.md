@@ -18,8 +18,11 @@ workon <ticket-id>
 # Get ticket info for current branch (use this to get context on the current task)
 workon ticket
 
-# Create PR with content
+# Create PR with content (base branch is auto-detected)
 workon pr --title "..." --summary "..." --description "..." --testing "..."
+
+# Create PR with explicit base branch (if auto-detection fails)
+workon pr --base master --title "..." --summary "..." --description "..." --testing "..."
 
 # Update PR sections
 workon pr-update --summary "..." --description "..." --testing "..." --ticket <id>
@@ -84,12 +87,20 @@ Steps:
    - **Description**: Detailed explanation referencing specific files/functions changed
    - **How to Test**: Step-by-step verification instructions with expected outcomes
 
-4. Run the workon command:
+4. **Get explicit user approval before creating the PR:**
+   - Show the user the PR details (title, summary, description, testing instructions)
+   - Ask: "Ready to create this PR and push to GitHub?"
+   - **WAIT for the user to explicitly confirm** (e.g., "yes", "go ahead", "create it")
+   - Do NOT proceed until you receive explicit approval
+
+5. After receiving approval, run the workon command:
    ```bash
    workon pr --title "..." --summary "..." --ticket "..." --description "..." --testing "..."
    ```
    - Add `--draft` if the user asks for a draft PR or mentions "draft", "WIP", or "work in progress"
    - The ticket ID is extracted from the branch automatically if not provided
+   - The base branch is auto-detected (checks if `main` or `master` exists in the repo)
+   - Use `--base <branch>` to override auto-detection if needed
 
 The workon CLI fills in the PR template sections. Do not modify the "Best Practices" checklist section.
 

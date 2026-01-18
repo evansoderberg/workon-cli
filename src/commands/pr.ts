@@ -1,4 +1,4 @@
-import { select, input } from '@inquirer/prompts';
+import { select, input, confirm } from '@inquirer/prompts';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import chalk from 'chalk';
@@ -18,6 +18,7 @@ export interface PrCommandOptions {
   ticket?: string;
   description?: string;
   testing?: string;
+  base?: string;
 }
 
 export async function prCommand(options: PrCommandOptions = {}): Promise<void> {
@@ -97,6 +98,34 @@ async function createPrInteractive(
   config: ReturnType<typeof loadConfig>,
   branch: string
 ): Promise<void> {
+  // Determine base branch for stats
+  const baseBranch = options.base
+    || (git.branchExists(config.git.baseBranch) ? config.git.baseBranch : git.getDefaultBaseBranch());
+
+  // Show push confirmation with branch info
+  const commits = git.commitCount(baseBranch);
+  const files = git.changedFilesCount(baseBranch);
+  const hasRemote = git.hasRemoteTracking();
+
+  console.log(chalk.bold('\n📦 Push Summary\n'));
+  console.log(`  Branch: ${chalk.cyan(branch)}`);
+  console.log(`  Base:   ${chalk.dim(baseBranch)}`);
+  console.log(`  ${chalk.green(commits)} commit${commits !== 1 ? 's' : ''}, ${chalk.yellow(files)} file${files !== 1 ? 's' : ''} changed`);
+  if (!hasRemote) {
+    console.log(chalk.dim('  (new branch, will create remote tracking)'));
+  }
+  console.log();
+
+  const shouldPush = await confirm({
+    message: 'Push to GitHub and create PR?',
+    default: true,
+  });
+
+  if (!shouldPush) {
+    console.log(chalk.yellow('Cancelled.'));
+    return;
+  }
+
   // Push branch
   const spinner = createSpinner('Pushing branch...').start();
   try {
@@ -199,11 +228,15 @@ ${testing}
   const spinner5 = createSpinner('Creating PR...').start();
 
   try {
+    // Use explicit --base option, or auto-detect if config value doesn't exist in this repo
+    const baseBranch = options.base
+      || (git.branchExists(config.git.baseBranch) ? config.git.baseBranch : git.getDefaultBaseBranch());
+
     const pr = github.createPr({
       title: prTitle,
       body: prBody,
       draft: action === 'draft' || options.draft,
-      base: config.git.baseBranch,
+      base: baseBranch,
     });
 
     spinner5.succeed(`Created PR #${pr.number}`);
@@ -258,6 +291,34 @@ async function createPrNonInteractive(
       console.error(chalk.red('No content received from stdin.'));
       process.exit(1);
     }
+  }
+
+  // Determine base branch for stats
+  const baseBranch = options.base
+    || (git.branchExists(config.git.baseBranch) ? config.git.baseBranch : git.getDefaultBaseBranch());
+
+  // Show push confirmation with branch info
+  const commits = git.commitCount(baseBranch);
+  const files = git.changedFilesCount(baseBranch);
+  const hasRemote = git.hasRemoteTracking();
+
+  console.log(chalk.bold('\n📦 Push Summary\n'));
+  console.log(`  Branch: ${chalk.cyan(branch)}`);
+  console.log(`  Base:   ${chalk.dim(baseBranch)}`);
+  console.log(`  ${chalk.green(commits)} commit${commits !== 1 ? 's' : ''}, ${chalk.yellow(files)} file${files !== 1 ? 's' : ''} changed`);
+  if (!hasRemote) {
+    console.log(chalk.dim('  (new branch, will create remote tracking)'));
+  }
+  console.log();
+
+  const shouldPush = await confirm({
+    message: 'Push to GitHub and create PR?',
+    default: true,
+  });
+
+  if (!shouldPush) {
+    console.log(chalk.yellow('Cancelled.'));
+    process.exit(0);
   }
 
   // Push branch first
@@ -344,7 +405,7 @@ async function createPrNonInteractive(
       title: prTitle,
       body: prBody,
       draft: options.draft,
-      base: config.git.baseBranch,
+      base: baseBranch,
     });
 
     createSpinnerInstance.succeed(`Created PR #${pr.number}`);

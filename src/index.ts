@@ -35,6 +35,7 @@ program
   .option('--ticket <id>', 'ClickUp ticket ID')
   .option('--description <text>', 'Description section, use "-" for stdin')
   .option('--testing <text>', 'Testing section, use "-" for stdin')
+  .option('--base <branch>', 'Base branch for PR (auto-detected if not specified)')
   .option('--dry-run', 'Show what would be done without executing')
   .action(withGracefulExit((options: PrCommandOptions & { dryRun?: boolean }) => {
     if (options.dryRun) setDryRun(true);

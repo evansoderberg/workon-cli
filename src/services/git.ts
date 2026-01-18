@@ -163,3 +163,55 @@ export function getDefaultBaseBranch(): string {
   }
   return 'main';
 }
+
+/**
+ * Get the number of commits ahead of base branch
+ */
+export function commitCount(base?: string): number {
+  const baseBranch = base || getDefaultBaseBranch();
+  try {
+    const output = gitSpawn(['rev-list', '--count', `${baseBranch}..HEAD`]).trim();
+    return parseInt(output, 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Get the number of files changed compared to base branch
+ */
+export function changedFilesCount(base?: string): number {
+  const baseBranch = base || getDefaultBaseBranch();
+  try {
+    const output = gitSpawn(['diff', '--name-only', baseBranch]).trim();
+    if (!output) return 0;
+    return output.split('\n').length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Check if the current branch has a remote tracking branch
+ */
+export function hasRemoteTracking(): boolean {
+  try {
+    gitSpawn(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get commits that would be pushed (not yet on remote)
+ */
+export function unpushedCommitCount(): number {
+  try {
+    const output = gitSpawn(['rev-list', '--count', '@{u}..HEAD']).trim();
+    return parseInt(output, 10) || 0;
+  } catch {
+    // No upstream, so all commits since base would be pushed
+    return commitCount();
+  }
+}

@@ -22,6 +22,9 @@ workon ticket
 # Create PR with content (base branch is auto-detected)
 workon pr --title "..." --summary "..." --description "..." --testing "..."
 
+# Create PR without confirmation prompt (use -y when running non-interactively)
+workon pr -y --title "..." --summary "..." --description "..." --testing "..."
+
 # Create PR with explicit base branch (if auto-detection fails)
 workon pr --base master --title "..." --summary "..." --description "..." --testing "..."
 
@@ -102,8 +105,9 @@ Steps:
 
 5. After receiving approval, run the workon command:
    ```bash
-   workon pr --title "..." --summary "..." --ticket "..." --description "..." --testing "..."
+   workon pr -y --title "..." --summary "..." --ticket "..." --description "..." --testing "..."
    ```
+   - Always use `-y` flag to skip the confirmation prompt (since user already approved)
    - Add `--draft` if the user asks for a draft PR or mentions "draft", "WIP", or "work in progress"
    - The ticket ID is extracted from the branch automatically if not provided
    - The base branch is auto-detected (checks if `main` or `master` exists in the repo)

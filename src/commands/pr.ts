@@ -19,6 +19,7 @@ export interface PrCommandOptions {
   description?: string;
   testing?: string;
   base?: string;
+  yes?: boolean;
 }
 
 export async function prCommand(options: PrCommandOptions = {}): Promise<void> {
@@ -311,14 +312,17 @@ async function createPrNonInteractive(
   }
   console.log();
 
-  const shouldPush = await confirm({
-    message: 'Push to GitHub and create PR?',
-    default: true,
-  });
+  // Skip confirmation if --yes flag is provided
+  if (!options.yes) {
+    const shouldPush = await confirm({
+      message: 'Push to GitHub and create PR?',
+      default: true,
+    });
 
-  if (!shouldPush) {
-    console.log(chalk.yellow('Cancelled.'));
-    process.exit(0);
+    if (!shouldPush) {
+      console.log(chalk.yellow('Cancelled.'));
+      process.exit(0);
+    }
   }
 
   // Push branch first

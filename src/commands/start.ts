@@ -398,7 +398,6 @@ Be concise and actionable. Output only the description, no preamble.
       name: title,
       markdown_description: description,
       assignees: [parseInt(config.clickup.userId, 10)],
-      status: config.defaults.status,
       custom_fields: customFieldsPayload,
     });
 

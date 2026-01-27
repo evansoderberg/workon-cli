@@ -2,6 +2,8 @@ import { Command } from 'commander';
 import { startCommand } from './commands/start.js';
 import { prCommand, type PrCommandOptions } from './commands/pr.js';
 import { prStatusCommand } from './commands/pr-status.js';
+import { ciStatusCommand } from './commands/ci-status.js';
+import { ciFailureCommand } from './commands/ci-failure.js';
 import { mergeCommand } from './commands/merge.js';
 import { initCommand } from './commands/init.js';
 import { prUpdateCommand, type PrUpdateOptions } from './commands/pr-update.js';
@@ -65,6 +67,23 @@ program
   .argument('[pr-number]', 'PR number (defaults to current branch)')
   .action(withGracefulExit(async (prNumber?: string) => {
     await prStatusCommand(prNumber);
+  }));
+
+program
+  .command('ci-status')
+  .description('Check CircleCI status for a branch')
+  .argument('[branch]', 'Branch name (defaults to current branch)')
+  .action(withGracefulExit(async (branch?: string) => {
+    await ciStatusCommand(branch);
+  }));
+
+program
+  .command('ci-failure')
+  .description('Get detailed output from a failed CI job')
+  .argument('[job-number]', 'Job number (defaults to first failed job on current branch)')
+  .option('--branch <branch>', 'Branch to check for failed jobs')
+  .action(withGracefulExit(async (jobNumber?: string, options?: { branch?: string }) => {
+    await ciFailureCommand(jobNumber, options?.branch);
   }));
 
 program

@@ -21,6 +21,9 @@ export interface Config {
     enabled: boolean;
     generateTicketDescriptions: boolean;
   };
+  circleci?: {
+    apiToken: string;
+  };
 }
 
 export interface WorkspaceConfig {
@@ -100,3 +103,65 @@ export interface GitHubPrStatus {
 export type StartMode = 'existing' | 'new';
 export type PrAction = 'create' | 'edit' | 'regenerate' | 'cancel';
 export type DescriptionAction = 'yes' | 'edit' | 'skip';
+
+// CircleCI Types
+export interface CircleCIPipeline {
+  id: string;
+  number: number;
+  state: string;
+  created_at: string;
+  trigger: {
+    type: string;
+    actor: {
+      login: string;
+    };
+  };
+  vcs: {
+    branch: string;
+    revision: string;
+  };
+}
+
+export interface CircleCIWorkflow {
+  id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  stopped_at: string | null;
+  pipeline_id: string;
+  pipeline_number: number;
+}
+
+export interface CircleCIJob {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  job_number: number;
+  started_at: string | null;
+  stopped_at: string | null;
+}
+
+export interface CircleCIJobDetail {
+  web_url: string;
+  name: string;
+  status: string;
+  duration: number;
+  messages: Array<{ type: string; message: string }>;
+}
+
+export interface CircleCITestMetadata {
+  message: string;
+  source: string;
+  run_time: number;
+  file: string;
+  result: string;
+  name: string;
+  classname: string;
+}
+
+export interface CircleCIArtifact {
+  path: string;
+  node_index: number;
+  url: string;
+}

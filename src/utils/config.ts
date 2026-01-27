@@ -34,6 +34,9 @@ const ConfigSchema = z.object({
     enabled: z.boolean().default(true),
     generateTicketDescriptions: z.boolean().default(true),
   }).default({}),
+  circleci: z.object({
+    apiToken: z.string().min(1),
+  }).optional(),
 });
 
 export function loadConfig(): Config {

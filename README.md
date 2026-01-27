@@ -9,7 +9,9 @@ A command-line tool for streamlined development workflow with ClickUp and GitHub
 - **`workon ticket`** - Get ticket info from ClickUp for context
 - **`workon comment`** - Add a comment to the current ticket
 - **`workon pr`** - Create a pull request with AI-generated description
-- **`workon pr-status`** - Check CI and approval status
+- **`workon pr-status`** - Check PR approval and CI status
+- **`workon ci-status`** - Check CircleCI build status for any branch
+- **`workon ci-failure`** - Get full error output from a failed CI job
 - **`workon merge`** - Post `/merge` comment to trigger merge automation
 
 ## Installation
@@ -45,6 +47,7 @@ This creates `~/.config/workon/config.json`. Edit it to add your:
    ```
 3. **Claude Code** (for AI features) - [Install](https://claude.ai/code)
 4. **ClickUp API token** - Settings → Apps → Generate token
+5. **CircleCI API token** (optional, for `ci-status`) - User Settings → Personal API Tokens
 
 ## Usage
 
@@ -123,6 +126,36 @@ workon pr-status
 workon pr-status 123
 ```
 
+### Check CI status
+
+```bash
+# Current branch
+workon ci-status
+
+# Specific branch
+workon ci-status feature/my-branch
+```
+
+Shows CircleCI pipeline status including:
+- Workflow status (passed/failed/running)
+- Individual job results
+- Job numbers for failed jobs
+
+### Get CI failure details
+
+```bash
+# Get output from first failed job on current branch
+workon ci-failure
+
+# Get output from a specific job number
+workon ci-failure 2928754
+
+# Check a different branch
+workon ci-failure --branch feature/other-branch
+```
+
+Fetches the full, untruncated error output from a failed CI step. Useful for debugging test failures, lint errors, or build issues.
+
 ### Merge
 
 ```bash
@@ -159,9 +192,18 @@ Edit `~/.config/workon/config.json`:
   "ai": {
     "enabled": true,
     "generateTicketDescriptions": true
+  },
+  "circleci": {
+    "apiToken": "CIRCLE_TOKEN"
   }
 }
 ```
+
+### CircleCI token
+
+The `ci-status` and `ci-failure` commands need a CircleCI API token. You can provide it via:
+- Config: `circleci.apiToken` in config.json
+- Environment: `CIRCLECI_TOKEN` or `CIRCLE_TOKEN`
 
 ### Sprint folder detection
 

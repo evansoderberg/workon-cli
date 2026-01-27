@@ -3,6 +3,12 @@ export interface Config {
     apiToken: string;
     userId: string;
     workspaceId: string;
+    workspaces: Record<string, WorkspaceConfig>;
+    defaults: {
+      status: string;
+      type?: string;
+      domain?: string;
+    };
   };
   github: {
     username: string;
@@ -10,12 +16,6 @@ export interface Config {
   git: {
     branchPrefix: string;
     baseBranch: string;
-  };
-  workspaces: Record<string, WorkspaceConfig>;
-  defaults: {
-    status: string;
-    type?: string;
-    domain?: string;
   };
   ai: {
     enabled: boolean;

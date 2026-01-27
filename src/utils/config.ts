@@ -13,6 +13,15 @@ const ConfigSchema = z.object({
     apiToken: z.string().min(1),
     userId: z.string().min(1),
     workspaceId: z.string().min(1),
+    workspaces: z.record(z.object({
+      folderId: z.string().min(1),
+      sprintPatterns: z.array(z.string()),
+    })),
+    defaults: z.object({
+      status: z.string().default('ON DECK'),
+      type: z.string().optional(),
+      domain: z.string().optional(),
+    }),
   }),
   github: z.object({
     username: z.string().min(1),
@@ -20,15 +29,6 @@ const ConfigSchema = z.object({
   git: z.object({
     branchPrefix: z.string().min(1),
     baseBranch: z.string().default('main'),
-  }),
-  workspaces: z.record(z.object({
-    folderId: z.string().min(1),
-    sprintPatterns: z.array(z.string()),
-  })),
-  defaults: z.object({
-    status: z.string().default('ON DECK'),
-    type: z.string().optional(),
-    domain: z.string().optional(),
   }),
   ai: z.object({
     enabled: z.boolean().default(true),
@@ -50,6 +50,7 @@ export function loadConfig(): Config {
   try {
     const raw = readFileSync(CONFIG_PATH, 'utf-8');
     const parsed = JSON.parse(raw);
+    migrateConfig(parsed);
     return ConfigSchema.parse(parsed);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -79,12 +80,42 @@ export function saveConfig(config: Config): void {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
+// Migrate old flat config format to new nested format
+function migrateConfig(parsed: Record<string, unknown>): void {
+  const clickup = parsed.clickup as Record<string, unknown> | undefined;
+  if (!clickup) return;
+
+  // Move top-level "workspaces" into clickup
+  if (parsed.workspaces && !clickup.workspaces) {
+    clickup.workspaces = parsed.workspaces;
+    delete parsed.workspaces;
+  }
+
+  // Move top-level "defaults" into clickup
+  if (parsed.defaults && !clickup.defaults) {
+    clickup.defaults = parsed.defaults;
+    delete parsed.defaults;
+  }
+}
+
 export function getExampleConfig(): Config {
   return {
     clickup: {
       apiToken: '',
       userId: '',
       workspaceId: '',
+      workspaces: {
+        Main: {
+          folderId: 'YOUR_FOLDER_ID',
+          sprintPatterns: [
+            'Sprint \\d+ \\(',
+            '\\d+ .+ \\('
+          ],
+        },
+      },
+      defaults: {
+        status: 'ON DECK',
+      },
     },
     github: {
       username: '',
@@ -92,18 +123,6 @@ export function getExampleConfig(): Config {
     git: {
       branchPrefix: '',
       baseBranch: 'main',
-    },
-    workspaces: {
-      Main: {
-        folderId: 'YOUR_FOLDER_ID',
-        sprintPatterns: [
-          'Sprint \\d+ \\(',
-          '\\d+ .+ \\('
-        ],
-      },
-    },
-    defaults: {
-      status: 'ON DECK',
     },
     ai: {
       enabled: true,

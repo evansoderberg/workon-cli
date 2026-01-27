@@ -49,6 +49,19 @@ export async function initCommand(): Promise<void> {
     default: githubUsername,
   });
 
+  const wantCircleci = await confirm({
+    message: 'Add CircleCI API token?',
+    default: false,
+  });
+
+  let circleciToken: string | undefined;
+  if (wantCircleci) {
+    circleciToken = await input({
+      message: 'CircleCI API token:',
+      validate: (v) => v.length > 0 || 'Required',
+    });
+  }
+
   // Create config
   const config = getExampleConfig();
   config.clickup.apiToken = clickupToken;
@@ -56,6 +69,10 @@ export async function initCommand(): Promise<void> {
   config.clickup.workspaceId = clickupWorkspaceId;
   config.github.username = githubUsername;
   config.git.branchPrefix = branchPrefix;
+
+  if (circleciToken) {
+    config.circleci = { apiToken: circleciToken };
+  }
 
   saveConfig(config);
 
@@ -65,7 +82,7 @@ export async function initCommand(): Promise<void> {
   console.log(chalk.dim('Edit the file to add workspace mappings and customize settings.'));
   console.log('');
   console.log(chalk.bold('Next steps:'));
-  console.log('  1. Add your workspace space IDs to the config');
+  console.log('  1. Add your ClickUp folder IDs under clickup.workspaces in the config');
   console.log('  2. Ensure gh CLI is authenticated: gh auth login');
   console.log('  3. Run: workon start');
 }

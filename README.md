@@ -32,10 +32,9 @@ npm link
 workon init
 ```
 
-This creates `~/.config/workon/config.json`. Edit it to add your:
-- ClickUp API token
-- Workspace space IDs
-- Sprint folder patterns
+This creates `~/.config/workon/config.json` with prompts for your ClickUp API token, user/workspace IDs, GitHub username, branch prefix, and optionally a CircleCI API token. After init, edit the config to add your:
+- ClickUp workspace folder IDs (`clickup.workspaces`)
+- Sprint folder patterns (`clickup.workspaces.<name>.sprintPatterns`)
 
 ## Prerequisites
 
@@ -171,7 +170,16 @@ Edit `~/.config/workon/config.json`:
   "clickup": {
     "apiToken": "pk_...",
     "userId": "12345678",
-    "workspaceId": "1234567"
+    "workspaceId": "1234567",
+    "workspaces": {
+      "Commerce": {
+        "folderId": "87654321",
+        "sprintPatterns": ["\\d+ Commerce 1 \\(", "Sprint \\d+ \\("]
+      }
+    },
+    "defaults": {
+      "status": "ON DECK"
+    }
   },
   "github": {
     "username": "username"
@@ -179,15 +187,6 @@ Edit `~/.config/workon/config.json`:
   "git": {
     "branchPrefix": "username",
     "baseBranch": "main"
-  },
-  "workspaces": {
-    "Commerce": {
-      "spaceId": "87654321",
-      "sprintPatterns": ["\\d+ Commerce 1 \\(", "Sprint \\d+ \\("]
-    }
-  },
-  "defaults": {
-    "status": "ON DECK"
   },
   "ai": {
     "enabled": true,

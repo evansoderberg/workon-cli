@@ -159,7 +159,7 @@ async function handleNewTicket(
   });
 
   // 2. Select workspace
-  const workspaceNames = Object.keys(config.workspaces);
+  const workspaceNames = Object.keys(config.clickup.workspaces);
   let workspace: string;
 
   if (workspaceNames.length === 1) {
@@ -172,7 +172,7 @@ async function handleNewTicket(
     });
   }
 
-  const workspaceConfig = config.workspaces[workspace];
+  const workspaceConfig = config.clickup.workspaces[workspace];
 
   // 3. Find current sprint list within the folder
   const spinner = createSpinner('Finding current sprint...').start();

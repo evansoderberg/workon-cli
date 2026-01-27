@@ -1,4 +1,4 @@
-import { select, input, confirm, search } from '@inquirer/prompts';
+import { select, input, confirm, search, editor } from '@inquirer/prompts';
 import chalk from 'chalk';
 import { loadConfig } from '../utils/config.js';
 import { isTicketId, generateBranchName } from '../utils/branch.js';
@@ -292,41 +292,70 @@ async function handleNewTicket(
     }
   }
 
-  // 7. Generate description (AI - optional)
-  let description = '';
+  // 7. Collect description (optional, can be blank)
+  let userDescription = await input({
+    message: 'Description (press enter to skip):',
+  });
 
+  // Offer to open in editor
+  if (userDescription.trim()) {
+    const wantEditor = await confirm({
+      message: 'Edit in your default editor?',
+      default: false,
+    });
+    if (wantEditor) {
+      userDescription = await editor({
+        message: 'Edit description',
+        default: userDescription,
+      });
+    }
+  } else {
+    const wantEditor = await confirm({
+      message: 'Open editor to write description?',
+      default: false,
+    });
+    if (wantEditor) {
+      userDescription = await editor({
+        message: 'Write description',
+      });
+    }
+  }
+
+  // 8. Optional acceptance criteria
+  let acceptanceCriteria = '';
+  const wantAcceptanceCriteria = await confirm({
+    message: 'Add acceptance criteria?',
+    default: false,
+  });
+
+  if (wantAcceptanceCriteria) {
+    console.log(chalk.dim('Enter acceptance criteria (one per line, empty line to finish):'));
+    const criteria: string[] = [];
+    let criterion = await input({ message: '  •' });
+    while (criterion.trim()) {
+      criteria.push(criterion.trim());
+      criterion = await input({ message: '  •' });
+    }
+    if (criteria.length > 0) {
+      acceptanceCriteria = criteria.map(c => `- ${c}`).join('\n');
+    }
+  }
+
+  // Build base description
+  let finalDescription = userDescription.trim();
+  if (acceptanceCriteria) {
+    finalDescription += (finalDescription ? '\n\n' : '') + '## Acceptance Criteria\n' + acceptanceCriteria;
+  }
+
+  // 9. Optional AI enhancement (at the end of the flow)
   if (config.ai.enabled && config.ai.generateTicketDescriptions) {
-    const wantDescription = await confirm({
-      message: 'Generate description with AI?',
-      default: true,
+    const wantEnhancement = await confirm({
+      message: 'Enhance description with AI?',
+      default: false,
     });
 
-    if (wantDescription) {
-      const additionalContext = await input({
-        message: 'Additional context (optional, press enter to skip):',
-      });
-
-      // Ask if user wants to provide acceptance criteria
-      const wantAcceptanceCriteria = await confirm({
-        message: 'Add acceptance criteria to guide the description?',
-        default: false,
-      });
-
-      let acceptanceCriteria = '';
-      if (wantAcceptanceCriteria) {
-        console.log(chalk.dim('Enter acceptance criteria (one per line, empty line to finish):'));
-        const criteria: string[] = [];
-        let criterion = await input({ message: '  •' });
-        while (criterion.trim()) {
-          criteria.push(criterion.trim());
-          criterion = await input({ message: '  •' });
-        }
-        if (criteria.length > 0) {
-          acceptanceCriteria = criteria.map(c => `- ${c}`).join('\n');
-        }
-      }
-
-      const spinner3 = createSpinner('Generating description...').start();
+    if (wantEnhancement) {
+      const spinner3 = createSpinner('Enhancing description...').start();
 
       try {
         const typeName = typeField?.type_config?.options?.find(o => o.id === typeValue)?.name || '';
@@ -337,50 +366,55 @@ async function handleNewTicket(
           .map(o => getOptionName(o!));
         const domainName = domainNames.join(', ');
 
-        const hasUserCriteria = acceptanceCriteria.length > 0;
-
-        description = await claude.generate(`
-Write a brief, professional ticket description for a software development task.
+        const enhancedDescription = await claude.generate(`
+You are enhancing an existing ticket description. Improve the clarity, professionalism, and completeness while preserving the original intent and meaning.
 
 Title: ${title}
 ${typeName ? `Type: ${typeName}` : ''}
 ${domainName ? `Domain: ${domainName}` : ''}
-${additionalContext ? `Additional context: ${additionalContext}` : ''}
-${hasUserCriteria ? `\nUser-provided acceptance criteria:\n${acceptanceCriteria}` : ''}
 
-Format:
-- 2-3 sentences describing the task
-- A "## Acceptance Criteria" section with ${hasUserCriteria ? 'the user-provided criteria below, refined and expanded as needed' : '3-4 bullet points'}
+ORIGINAL DESCRIPTION:
+${finalDescription || '(No description provided)'}
 
-Be concise and actionable. Output only the description, no preamble.
+INSTRUCTIONS:
+- Keep the core message and intent intact
+- Improve clarity and professional tone
+- Fix any grammar or spelling issues
+- If there is an "## Acceptance Criteria" section, refine and expand the criteria as needed
+- If there is NO acceptance criteria section, add one with 3-4 bullet points based on the title and context
+- Keep the description concise (2-3 sentences for the main description)
+- Output only the enhanced description, no preamble or explanation
         `);
 
         spinner3.stop();
-        showBox(description);
+        showBox(enhancedDescription, 'AI Enhanced Description');
 
         const useIt = await select({
-          message: 'Use this description?',
+          message: 'Use this enhanced description?',
           choices: [
-            { name: 'Yes', value: 'yes' },
-            { name: 'Edit (opens $EDITOR)', value: 'edit' },
-            { name: 'Skip (no description)', value: 'skip' },
+            { name: 'Yes, use enhanced', value: 'yes' },
+            { name: 'Edit', value: 'edit' },
+            { name: 'Keep original', value: 'skip' },
           ],
         });
 
-        if (useIt === 'edit') {
-          // For now, just let them type a new one
-          description = await input({ message: 'Enter description:' });
-        } else if (useIt === 'skip') {
-          description = '';
+        if (useIt === 'yes') {
+          finalDescription = enhancedDescription;
+        } else if (useIt === 'edit') {
+          finalDescription = await editor({
+            message: 'Edit description',
+            default: enhancedDescription,
+          });
         }
+        // if 'skip', finalDescription remains as the user's original
       } catch (error) {
-        spinner3.fail('Failed to generate description');
-        console.error(chalk.yellow('Continuing without description...'));
+        spinner3.fail('Failed to enhance description');
+        console.error(chalk.yellow('Continuing with original description...'));
       }
     }
   }
 
-  // 8. Create the task
+  // 10. Create the task
   const spinner4 = createSpinner('Creating ticket...').start();
 
   try {
@@ -396,14 +430,14 @@ Be concise and actionable. Output only the description, no preamble.
 
     const task = await clickup.createTask(listId, {
       name: title,
-      markdown_description: description,
+      markdown_description: finalDescription,
       assignees: [parseInt(config.clickup.userId, 10)],
       custom_fields: customFieldsPayload,
     });
 
     spinner4.succeed(`Created ticket: ${task.id}`);
 
-    // 9. Create branch
+    // 11. Create branch
     const branchName = generateBranchName(config.git.branchPrefix, task.id, title);
     git.checkoutNewBranch(branchName);
 

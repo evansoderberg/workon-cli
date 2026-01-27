@@ -101,7 +101,7 @@ async function createPrInteractive(
 ): Promise<void> {
   // Determine base branch for stats
   const baseBranch = options.base
-    || (git.branchExists(config.git.baseBranch) ? config.git.baseBranch : git.getDefaultBaseBranch());
+    || git.getDefaultBaseBranch();
 
   // Show push confirmation with branch info
   const commits = git.commitCount(baseBranch);
@@ -231,7 +231,7 @@ ${testing}
   try {
     // Use explicit --base option, or auto-detect if config value doesn't exist in this repo
     const baseBranch = options.base
-      || (git.branchExists(config.git.baseBranch) ? config.git.baseBranch : git.getDefaultBaseBranch());
+      || git.getDefaultBaseBranch();
 
     const pr = github.createPr({
       title: prTitle,
@@ -296,7 +296,7 @@ async function createPrNonInteractive(
 
   // Determine base branch for stats
   const baseBranch = options.base
-    || (git.branchExists(config.git.baseBranch) ? config.git.baseBranch : git.getDefaultBaseBranch());
+    || git.getDefaultBaseBranch();
 
   // Show push confirmation with branch info
   const commits = git.commitCount(baseBranch);

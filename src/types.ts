@@ -15,7 +15,6 @@ export interface Config {
   };
   git: {
     branchPrefix: string;
-    baseBranch: string;
   };
   ai: {
     enabled: boolean;

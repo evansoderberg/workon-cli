@@ -28,7 +28,6 @@ const ConfigSchema = z.object({
   }),
   git: z.object({
     branchPrefix: z.string().min(1),
-    baseBranch: z.string().default('main'),
   }),
   ai: z.object({
     enabled: z.boolean().default(true),
@@ -96,6 +95,7 @@ function migrateConfig(parsed: Record<string, unknown>): void {
     clickup.defaults = parsed.defaults;
     delete parsed.defaults;
   }
+
 }
 
 export function getExampleConfig(): Config {
@@ -122,7 +122,6 @@ export function getExampleConfig(): Config {
     },
     git: {
       branchPrefix: '',
-      baseBranch: 'main',
     },
     ai: {
       enabled: true,

@@ -185,8 +185,7 @@ Edit `~/.config/workon/config.json`:
     "username": "username"
   },
   "git": {
-    "branchPrefix": "username",
-    "baseBranch": "main"
+    "branchPrefix": "username"
   },
   "ai": {
     "enabled": true,

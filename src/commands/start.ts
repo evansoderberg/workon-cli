@@ -28,8 +28,9 @@ export async function startCommand(ticketIdArg?: string): Promise<void> {
 
   // Safety check: warn if not on base branch (only for interactive mode)
   const currentBranch = git.currentBranch();
-  if (!git.isBaseBranch(config.git.baseBranch)) {
-    console.log(chalk.yellow(`\n⚠️  Warning: You are on branch '${currentBranch}', not '${config.git.baseBranch}'.`));
+  if (!git.isBaseBranch()) {
+    const baseBranch = git.getDefaultBaseBranch();
+    console.log(chalk.yellow(`\n⚠️  Warning: You are on branch '${currentBranch}', not '${baseBranch}'.`));
     console.log(chalk.yellow('   Creating a new branch from here may not be what you intended.\n'));
 
     const proceed = await confirm({
@@ -38,7 +39,7 @@ export async function startCommand(ticketIdArg?: string): Promise<void> {
     });
 
     if (!proceed) {
-      console.log(chalk.dim(`Tip: Run 'git checkout ${config.git.baseBranch}' first, then try again.`));
+      console.log(chalk.dim(`Tip: Run 'git checkout ${git.getDefaultBaseBranch()}' first, then try again.`));
       return;
     }
   }

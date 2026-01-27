@@ -143,10 +143,9 @@ export function isGitRepo(): boolean {
 /**
  * Check if current branch is a base branch (main, master, or configured base)
  */
-export function isBaseBranch(baseBranch = 'main'): boolean {
+export function isBaseBranch(): boolean {
   const current = currentBranch();
-  const baseBranches = ['main', 'master', baseBranch].filter(Boolean);
-  return baseBranches.includes(current);
+  return current === getDefaultBaseBranch();
 }
 
 /**

@@ -7,7 +7,7 @@ import { createSpinner, showSuccess, showBox } from '../utils/ui.js';
 import { createClickUpClient } from '../services/clickup.js';
 import * as git from '../services/git.js';
 import * as claude from '../services/claude.js';
-import type { Config, ClickUpList, ClickUpCustomField } from '../types.js';
+import type { Config, ClickUpList, ClickUpFolder, ClickUpCustomField } from '../types.js';
 
 export async function startCommand(ticketIdArg?: string): Promise<void> {
   // Verify we're in a git repo
@@ -148,6 +148,95 @@ async function startFromExisting(
   }
 }
 
+const BROWSE_ALL_SPACES = '__browse_all__';
+
+/**
+ * Browse for a list starting from a specific folder's lists.
+ * Offers a "Browse all spaces..." escape hatch to navigate the full hierarchy.
+ */
+async function browseFromFolder(
+  clickup: ReturnType<typeof createClickUpClient>,
+  lists: ClickUpList[],
+): Promise<ClickUpList> {
+  const choice = await select<ClickUpList | typeof BROWSE_ALL_SPACES>({
+    message: 'Select list:',
+    choices: [
+      ...lists.map(l => ({ name: l.name, value: l })),
+      { name: 'Browse all spaces...', value: BROWSE_ALL_SPACES },
+    ],
+  });
+
+  if (choice === BROWSE_ALL_SPACES) {
+    return browseFromSpaces(clickup);
+  }
+
+  return choice;
+}
+
+/**
+ * Browse the full ClickUp hierarchy: Space → Folder/List → List
+ */
+async function browseFromSpaces(
+  clickup: ReturnType<typeof createClickUpClient>,
+): Promise<ClickUpList> {
+  // 1. Select a space
+  const spacesSpinner = createSpinner('Loading spaces...').start();
+  const spaces = await clickup.getSpaces();
+  spacesSpinner.stop();
+
+  const spaceId = await select({
+    message: 'Select space:',
+    choices: spaces.map(s => ({ name: s.name, value: s.id })),
+  });
+
+  // 2. Load folders and folderless lists for the space
+  const foldersSpinner = createSpinner('Loading folders...').start();
+  const [folders, folderlessLists] = await Promise.all([
+    clickup.getFolders(spaceId),
+    clickup.getFolderlessLists(spaceId),
+  ]);
+  foldersSpinner.stop();
+
+  type FolderOrList = { type: 'folder'; folder: ClickUpFolder } | { type: 'list'; list: ClickUpList };
+
+  const choices: Array<{ name: string; value: FolderOrList }> = [
+    ...folders.map(f => ({
+      name: `📁 ${f.name}`,
+      value: { type: 'folder' as const, folder: f },
+    })),
+    ...folderlessLists.map(l => ({
+      name: `  ${l.name}`,
+      value: { type: 'list' as const, list: l },
+    })),
+  ];
+
+  if (choices.length === 0) {
+    throw new Error('No folders or lists found in this space.');
+  }
+
+  const selection = await select<FolderOrList>({
+    message: 'Select folder or list:',
+    choices,
+  });
+
+  // If they picked a list directly, return it
+  if (selection.type === 'list') {
+    return selection.list;
+  }
+
+  // 3. They picked a folder — show lists within it
+  const listsSpinner = createSpinner('Loading lists...').start();
+  const listsInFolder = await clickup.getLists(selection.folder.id);
+  listsSpinner.stop();
+
+  if (listsInFolder.length === 0) {
+    console.log(chalk.yellow('No lists found in this folder.'));
+    return browseFromSpaces(clickup);
+  }
+
+  return browseFromFolder(clickup, listsInFolder);
+}
+
 async function handleNewTicket(
   config: Config,
   clickup: ReturnType<typeof createClickUpClient>,
@@ -159,56 +248,80 @@ async function handleNewTicket(
     validate: (v) => v.length > 0 || 'Required',
   });
 
-  // 2. Select workspace
+  // 2. Select workspace or browse all spaces
   const workspaceNames = Object.keys(config.clickup.workspaces);
-  let workspace: string;
+  const BROWSE_SPACES = '__browse_spaces__';
 
+  let selectedList: ClickUpList;
+
+  const workspaceChoices = [
+    ...workspaceNames.map(w => ({ name: w, value: w })),
+    { name: 'Browse all spaces...', value: BROWSE_SPACES },
+  ];
+
+  let workspaceChoice: string;
   if (workspaceNames.length === 1) {
-    workspace = workspaceNames[0];
-    console.log(chalk.dim(`Using workspace: ${workspace}`));
+    // Single saved workspace — use it directly, user can still browse from within
+    workspaceChoice = workspaceNames[0];
+    console.log(chalk.dim(`Using workspace: ${workspaceChoice}`));
   } else {
-    workspace = await select({
+    workspaceChoice = await select({
       message: 'Workspace:',
-      choices: workspaceNames.map(w => ({ name: w, value: w })),
+      choices: workspaceChoices,
     });
   }
 
-  const workspaceConfig = config.clickup.workspaces[workspace];
-
-  // 3. Find current sprint list within the folder
-  const spinner = createSpinner('Finding current sprint...').start();
-
-  let lists: ClickUpList[];
-  let sprintList: ClickUpList | null = null;
-
-  try {
-    lists = await clickup.getLists(workspaceConfig.folderId);
-    sprintList = findCurrentSprintByDate(lists, workspaceConfig.sprintPatterns);
-    spinner.stop();
-  } catch (error) {
-    spinner.fail('Failed to fetch lists');
-    console.error(chalk.red(error));
-    return;
-  }
-
-  if (!sprintList) {
-    // Filter to only show lists matching sprint patterns or with date ranges
-    const sprintLists = lists.filter(l =>
-      workspaceConfig.sprintPatterns.some(p => new RegExp(p).test(l.name)) ||
-      /\(\d{1,2}\/\d{1,2}\s*-\s*\d{1,2}\/\d{1,2}\)/.test(l.name)
-    );
-
-    const listsToShow = sprintLists.length > 0 ? sprintLists : lists;
-
-    sprintList = await select({
-      message: 'Select sprint:',
-      choices: listsToShow.map(l => ({ name: l.name, value: l })),
-    });
+  if (workspaceChoice === BROWSE_SPACES) {
+    // Full hierarchy browsing from scratch
+    selectedList = await browseFromSpaces(clickup);
   } else {
-    showSuccess(`Found sprint: ${sprintList.name}`);
+    // Saved workspace — find current sprint, then let user pick or browse
+    const workspaceConfig = config.clickup.workspaces[workspaceChoice];
+
+    const spinner = createSpinner('Finding current sprint...').start();
+
+    let lists: ClickUpList[];
+    let sprintList: ClickUpList | null = null;
+
+    try {
+      lists = await clickup.getLists(workspaceConfig.folderId);
+      sprintList = findCurrentSprintByDate(lists, workspaceConfig.sprintPatterns);
+      spinner.stop();
+    } catch (error) {
+      spinner.fail('Failed to fetch lists');
+      console.error(chalk.red(error));
+      return;
+    }
+
+    if (sprintList) {
+      // Sprint found — offer it as default, or browse this folder's lists
+      const BROWSE_FOLDER = '__browse_folder__';
+      const choice = await select<string>({
+        message: 'Place ticket in:',
+        choices: [
+          { name: `${sprintList.name} (current sprint)`, value: sprintList.id },
+          { name: 'Browse other lists...', value: BROWSE_FOLDER },
+        ],
+      });
+
+      if (choice === BROWSE_FOLDER) {
+        selectedList = await browseFromFolder(clickup, lists);
+      } else {
+        selectedList = sprintList;
+      }
+    } else {
+      // No sprint auto-detected — show folder lists with browse escape
+      const sprintLists = lists.filter(l =>
+        workspaceConfig.sprintPatterns.some(p => new RegExp(p).test(l.name)) ||
+        /\(\d{1,2}\/\d{1,2}\s*-\s*\d{1,2}\/\d{1,2}\)/.test(l.name)
+      );
+
+      const listsToShow = sprintLists.length > 0 ? sprintLists : lists;
+      selectedList = await browseFromFolder(clickup, listsToShow);
+    }
   }
 
-  const listId = sprintList.id;
+  const listId = selectedList.id;
 
   // 4. Get custom fields
   const spinner2 = createSpinner('Loading custom fields...').start();

@@ -1,5 +1,6 @@
 import type {
   ClickUpTask,
+  ClickUpSpace,
   ClickUpFolder,
   ClickUpList,
   ClickUpCustomField,
@@ -54,6 +55,16 @@ export class ClickUpClient {
   }
 
   /**
+   * Get all spaces in the workspace
+   */
+  async getSpaces(): Promise<ClickUpSpace[]> {
+    const data = await this.request<{ spaces: ClickUpSpace[] }>(
+      `/team/${this.workspaceId}/space`
+    );
+    return data.spaces;
+  }
+
+  /**
    * Get all folders in a space
    */
   async getFolders(spaceId: string): Promise<ClickUpFolder[]> {
@@ -61,6 +72,16 @@ export class ClickUpClient {
       `/space/${spaceId}/folder`
     );
     return data.folders;
+  }
+
+  /**
+   * Get folderless lists in a space
+   */
+  async getFolderlessLists(spaceId: string): Promise<ClickUpList[]> {
+    const data = await this.request<{ lists: ClickUpList[] }>(
+      `/space/${spaceId}/list`
+    );
+    return data.lists;
   }
 
   /**

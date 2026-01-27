@@ -45,6 +45,11 @@ export interface ClickUpTask {
   custom_fields?: ClickUpCustomField[];
 }
 
+export interface ClickUpSpace {
+  id: string;
+  name: string;
+}
+
 export interface ClickUpFolder {
   id: string;
   name: string;

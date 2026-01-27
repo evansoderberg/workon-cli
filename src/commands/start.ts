@@ -7,7 +7,8 @@ import { createSpinner, showSuccess, showBox } from '../utils/ui.js';
 import { createClickUpClient } from '../services/clickup.js';
 import * as git from '../services/git.js';
 import * as claude from '../services/claude.js';
-import type { Config, ClickUpList, ClickUpFolder, ClickUpCustomField } from '../types.js';
+import type { Config, ClickUpList, ClickUpCustomField } from '../types.js';
+import hierarchyBrowser, { type BrowseItem } from '../prompts/hierarchy-browser.js';
 
 export async function startCommand(ticketIdArg?: string): Promise<void> {
   // Verify we're in a git repo
@@ -148,93 +149,129 @@ async function startFromExisting(
   }
 }
 
-const BROWSE_ALL_SPACES = '__browse_all__';
-
 /**
- * Browse for a list starting from a specific folder's lists.
- * Offers a "Browse all spaces..." escape hatch to navigate the full hierarchy.
+ * Build the onDrillDown callback for the hierarchy browser.
+ * Handles drilling into spaces (loads folders + folderless lists)
+ * and folders (loads lists within them).
  */
-async function browseFromFolder(
+function makeDrillDown(
   clickup: ReturnType<typeof createClickUpClient>,
-  lists: ClickUpList[],
-): Promise<ClickUpList> {
-  const choice = await select<ClickUpList | typeof BROWSE_ALL_SPACES>({
-    message: 'Select list:',
-    choices: [
-      ...lists.map(l => ({ name: l.name, value: l })),
-      { name: 'Browse all spaces...', value: BROWSE_ALL_SPACES },
-    ],
-  });
+): (item: BrowseItem) => Promise<BrowseItem[]> {
+  return async (item: BrowseItem): Promise<BrowseItem[]> => {
+    // Item ID format: "space:<id>" or "folder:<id>"
+    const [kind, id] = item.id.split(':') as [string, string];
 
-  if (choice === BROWSE_ALL_SPACES) {
-    return browseFromSpaces(clickup);
-  }
+    if (kind === 'space') {
+      const [folders, folderlessLists] = await Promise.all([
+        clickup.getFolders(id),
+        clickup.getFolderlessLists(id),
+      ]);
+      return [
+        ...folders.map(f => ({ id: `folder:${f.id}`, name: f.name, type: 'container' as const })),
+        ...folderlessLists.map(l => ({ id: l.id, name: l.name, type: 'leaf' as const })),
+      ];
+    }
 
-  return choice;
+    if (kind === 'folder') {
+      const lists = await clickup.getLists(id);
+      return lists.map(l => ({ id: l.id, name: l.name, type: 'leaf' as const }));
+    }
+
+    return [];
+  };
 }
 
 /**
- * Browse the full ClickUp hierarchy: Space → Folder/List → List
+ * Browse for a list starting from a specific folder's lists.
+ * Parent hierarchy (spaces → folders) is lazy-loaded only when the user presses left arrow.
+ */
+async function browseFromFolder(
+  clickup: ReturnType<typeof createClickUpClient>,
+  folderId: string,
+  lists: ClickUpList[],
+): Promise<ClickUpList> {
+  const items: BrowseItem[] = lists.map(l => ({
+    id: l.id,
+    name: l.name,
+    type: 'leaf' as const,
+  }));
+
+  const result = await hierarchyBrowser({
+    message: 'Select list:',
+    items,
+    onDrillDown: makeDrillDown(clickup),
+    onBack: async () => {
+      // Lazy-load: find the parent space and sibling folders
+      const spaces = await clickup.getSpaces();
+      const spaceItems: BrowseItem[] = spaces.map(s => ({
+        id: `space:${s.id}`,
+        name: s.name,
+        type: 'container' as const,
+      }));
+
+      // Search spaces in parallel for the one containing our folder
+      const spaceResults = await Promise.all(
+        spaces.map(async (space) => {
+          const [folders, folderlessLists] = await Promise.all([
+            clickup.getFolders(space.id),
+            clickup.getFolderlessLists(space.id),
+          ]);
+          const match = folders.find(f => f.id === folderId);
+          return { space, folders, folderlessLists, match };
+        }),
+      );
+
+      const found = spaceResults.find(r => r.match);
+      if (found) {
+        const siblingItems: BrowseItem[] = [
+          ...found.folders.map(f => ({ id: `folder:${f.id}`, name: f.name, type: 'container' as const })),
+          ...found.folderlessLists.map(l => ({ id: l.id, name: l.name, type: 'leaf' as const })),
+        ];
+        const folderIdx = siblingItems.findIndex(s => s.id === `folder:${folderId}`);
+        const spaceIdx = spaces.findIndex(s => s.id === found.space.id);
+
+        return {
+          stack: [
+            { items: spaceItems, active: spaceIdx, label: found.space.name },
+            { items: siblingItems, active: folderIdx >= 0 ? folderIdx : 0, label: found.match!.name },
+          ],
+          breadcrumb: [found.space.name, found.match!.name],
+        };
+      }
+
+      // Fallback: just show spaces
+      return {
+        stack: [{ items: spaceItems, active: 0, label: 'Spaces' }],
+        breadcrumb: ['Spaces'],
+      };
+    },
+  });
+
+  return { id: result.id, name: result.name };
+}
+
+/**
+ * Browse the full ClickUp hierarchy starting from spaces.
+ * Space → Folder/List → List, navigable with arrow keys.
  */
 async function browseFromSpaces(
   clickup: ReturnType<typeof createClickUpClient>,
 ): Promise<ClickUpList> {
-  // 1. Select a space
-  const spacesSpinner = createSpinner('Loading spaces...').start();
   const spaces = await clickup.getSpaces();
-  spacesSpinner.stop();
 
-  const spaceId = await select({
-    message: 'Select space:',
-    choices: spaces.map(s => ({ name: s.name, value: s.id })),
+  const items: BrowseItem[] = spaces.map(s => ({
+    id: `space:${s.id}`,
+    name: s.name,
+    type: 'container' as const,
+  }));
+
+  const result = await hierarchyBrowser({
+    message: 'Select list:',
+    items,
+    onDrillDown: makeDrillDown(clickup),
   });
 
-  // 2. Load folders and folderless lists for the space
-  const foldersSpinner = createSpinner('Loading folders...').start();
-  const [folders, folderlessLists] = await Promise.all([
-    clickup.getFolders(spaceId),
-    clickup.getFolderlessLists(spaceId),
-  ]);
-  foldersSpinner.stop();
-
-  type FolderOrList = { type: 'folder'; folder: ClickUpFolder } | { type: 'list'; list: ClickUpList };
-
-  const choices: Array<{ name: string; value: FolderOrList }> = [
-    ...folders.map(f => ({
-      name: `📁 ${f.name}`,
-      value: { type: 'folder' as const, folder: f },
-    })),
-    ...folderlessLists.map(l => ({
-      name: `  ${l.name}`,
-      value: { type: 'list' as const, list: l },
-    })),
-  ];
-
-  if (choices.length === 0) {
-    throw new Error('No folders or lists found in this space.');
-  }
-
-  const selection = await select<FolderOrList>({
-    message: 'Select folder or list:',
-    choices,
-  });
-
-  // If they picked a list directly, return it
-  if (selection.type === 'list') {
-    return selection.list;
-  }
-
-  // 3. They picked a folder — show lists within it
-  const listsSpinner = createSpinner('Loading lists...').start();
-  const listsInFolder = await clickup.getLists(selection.folder.id);
-  listsSpinner.stop();
-
-  if (listsInFolder.length === 0) {
-    console.log(chalk.yellow('No lists found in this folder.'));
-    return browseFromSpaces(clickup);
-  }
-
-  return browseFromFolder(clickup, listsInFolder);
+  return { id: result.id, name: result.name };
 }
 
 async function handleNewTicket(
@@ -293,32 +330,28 @@ async function handleNewTicket(
       return;
     }
 
+    // Sort lists: detected sprint first, then other sprint-patterned lists, then the rest
+    const isSprintLike = (l: ClickUpList) =>
+      workspaceConfig.sprintPatterns.some(p => new RegExp(p).test(l.name)) ||
+      /\d{1,2}\/\d{1,2}\s*-\s*\d{1,2}\/\d{1,2}/.test(l.name);
+
+    const sortedLists: ClickUpList[] = [];
     if (sprintList) {
-      // Sprint found — offer it as default, or browse this folder's lists
-      const BROWSE_FOLDER = '__browse_folder__';
-      const choice = await select<string>({
-        message: 'Place ticket in:',
-        choices: [
-          { name: `${sprintList.name} (current sprint)`, value: sprintList.id },
-          { name: 'Browse other lists...', value: BROWSE_FOLDER },
-        ],
-      });
-
-      if (choice === BROWSE_FOLDER) {
-        selectedList = await browseFromFolder(clickup, lists);
-      } else {
-        selectedList = sprintList;
-      }
-    } else {
-      // No sprint auto-detected — show folder lists with browse escape
-      const sprintLists = lists.filter(l =>
-        workspaceConfig.sprintPatterns.some(p => new RegExp(p).test(l.name)) ||
-        /\(\d{1,2}\/\d{1,2}\s*-\s*\d{1,2}\/\d{1,2}\)/.test(l.name)
-      );
-
-      const listsToShow = sprintLists.length > 0 ? sprintLists : lists;
-      selectedList = await browseFromFolder(clickup, listsToShow);
+      sortedLists.push(sprintList);
+      showSuccess(`Found sprint: ${sprintList.name}`);
     }
+    // Add remaining sprint-like lists
+    for (const l of lists) {
+      if (sprintList && l.id === sprintList.id) continue;
+      if (isSprintLike(l)) sortedLists.push(l);
+    }
+    // Add non-sprint lists
+    for (const l of lists) {
+      if (sortedLists.some(s => s.id === l.id)) continue;
+      sortedLists.push(l);
+    }
+
+    selectedList = await browseFromFolder(clickup, workspaceConfig.folderId, sortedLists);
   }
 
   const listId = selectedList.id;

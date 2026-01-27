@@ -36,8 +36,8 @@ export function findCurrentSprintByDate(
       if (!matchesPattern) continue;
     }
 
-    // Extract date range: (MM/DD - MM/DD)
-    const dateMatch = list.name.match(/\((\d{1,2}\/\d{1,2})\s*-\s*(\d{1,2}\/\d{1,2})\)/);
+    // Extract date range: (MM/DD - MM/DD) or MM/DD-MM/DD (with or without parens/spaces)
+    const dateMatch = list.name.match(/\(?(\d{1,2}\/\d{1,2})\)?\s*-\s*\(?(\d{1,2}\/\d{1,2})\)?/);
     if (!dateMatch) continue;
 
     const [, startStr, endStr] = dateMatch;

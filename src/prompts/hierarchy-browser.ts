@@ -154,7 +154,7 @@ const hierarchyBrowser = createPrompt<BrowseItem, HierarchyBrowserConfig>((confi
       const term = rl.line.toLowerCase();
       if (term) {
         const matchIndex = items.findIndex(item =>
-          item.name.toLowerCase().startsWith(term),
+          item.name.toLowerCase().includes(term),
         );
         if (matchIndex !== -1) {
           setActive(matchIndex);

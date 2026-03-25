@@ -5,6 +5,7 @@ import type {
   CircleCIJob,
   CircleCIJobDetail,
   CircleCITestMetadata,
+  CircleCIFlakyTest,
 } from '../types.js';
 
 const CIRCLECI_API = 'https://circleci.com/api/v2';
@@ -257,6 +258,36 @@ export interface CIStatus {
   pipelineId: string;
   workflows: WorkflowStatus[];
   failedJobs: FailedJob[];
+}
+
+export interface FlakyTestsResult {
+  projectSlug: string;
+  totalFlakyTests: number;
+  flakyTests: CircleCIFlakyTest[];
+}
+
+/**
+ * Get flaky tests for the project from the CircleCI Insights API
+ */
+export async function getFlakyTests(
+  token: string,
+  projectSlugOverride?: string
+): Promise<FlakyTestsResult> {
+  const projectSlug = projectSlugOverride || getProjectSlug();
+  if (!projectSlug) {
+    throw new Error('Could not determine project slug from git remote');
+  }
+
+  const data = await circleciRequest<{
+    flaky_tests: CircleCIFlakyTest[];
+    total_flaky_tests: number;
+  }>(`/insights/${projectSlug}/flaky-tests`, token);
+
+  return {
+    projectSlug,
+    totalFlakyTests: data.total_flaky_tests,
+    flakyTests: data.flaky_tests,
+  };
 }
 
 /**

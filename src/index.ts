@@ -4,6 +4,7 @@ import { prCommand, type PrCommandOptions } from './commands/pr.js';
 import { prStatusCommand } from './commands/pr-status.js';
 import { ciStatusCommand } from './commands/ci-status.js';
 import { ciFailureCommand } from './commands/ci-failure.js';
+import { ciFlakyCommand } from './commands/ci-flaky.js';
 import { mergeCommand } from './commands/merge.js';
 import { initCommand } from './commands/init.js';
 import { prUpdateCommand, type PrUpdateOptions } from './commands/pr-update.js';
@@ -84,6 +85,16 @@ program
   .option('--branch <branch>', 'Branch to check for failed jobs')
   .action(withGracefulExit(async (jobNumber?: string, options?: { branch?: string }) => {
     await ciFailureCommand(jobNumber, options?.branch);
+  }));
+
+program
+  .command('ci-flaky')
+  .description('List flaky tests from CircleCI Insights')
+  .option('--days <n>', 'Only show tests that flaked in the last N days')
+  .option('--job <name>', 'Filter by job name (e.g., api, bloom-e2e)')
+  .option('--details', 'Fetch and display failure messages for each flaky test')
+  .action(withGracefulExit(async (options: { days?: string; job?: string; details?: boolean }) => {
+    await ciFlakyCommand(options);
   }));
 
 program

@@ -169,3 +169,18 @@ export interface CircleCIArtifact {
   node_index: number;
   url: string;
 }
+
+export interface CircleCIFlakyTest {
+  test_name: string;
+  classname: string;
+  file: string;
+  job_name: string;
+  job_number: number;
+  workflow_name: string;
+  workflow_id: string;
+  workflow_created_at: string;
+  pipeline_number: number;
+  times_flaked: number;
+  time_wasted: number;
+  source: string;
+}
